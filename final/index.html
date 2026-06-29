@@ -643,21 +643,6 @@ canvas{
 <div class="final-sub">
 أتممت الوصفات بنجاح
 </div>
-
-<div id="leaderboard-panel">
-<div class="leaderboard-title">
-لوحة المتصدرين
-</div>
-<div id="leaderboard-list"></div>
-</div>
-
-<button class="main-btn" style="margin-top:8px;" onclick="restartGame()">
-العب مجددًا
-</button>
-
-</div>
-</div>
-
 <script>
 const canvas = document.getElementById('climberCanvas');
 const ctx = canvas.getContext('2d');
@@ -666,9 +651,10 @@ const container = document.getElementById('game-container');
 let CW = canvas.width = window.innerWidth;
 let CH = canvas.height = window.innerHeight;
 
-const GRAVITY = 0.35;
-const BASE_JUMP = -8.9;
-const ITEM_BOUNCE = -6.2;
+// Snappier, faster physics parameters to eliminate slugging pacing
+const GRAVITY = 0.42;
+const BASE_JUMP = -9.8;
+const ITEM_BOUNCE = -7.2;
 
 let currentLevel = 1;
 let score = 0;
@@ -692,6 +678,9 @@ let moveLeft = false;
 let moveRight = false;
 let screenShake = 0;
 
+// Delta-time tracking variables to normalize physics across all frame rates (30FPS / 60FPS / 120FPS)
+let lastTime = performance.now();
+
 // ==========================================
 // PARTICLE SYSTEM
 // ==========================================
@@ -707,20 +696,18 @@ class Particle {
     this.maxLife = life;
   }
 
-  update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.vx *= 0.98;
-    this.vy *= 0.98;
-    this.life--;
+  update(dt) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vx *= Math.pow(0.98, dt);
+    this.vy *= Math.pow(0.98, dt);
+    this.life -= dt;
   }
 
   draw() {
     ctx.save();
     ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
     ctx.fillStyle = this.color;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = this.color;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
     ctx.fill();
@@ -755,9 +742,9 @@ class ParticleSystem {
     }
   }
 
-  update() {
+  update(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
-      this.particles[i].update();
+      this.particles[i].update(dt);
       if (this.particles[i].life <= 0) {
         this.particles.splice(i, 1);
       }
@@ -916,16 +903,18 @@ class PlayerBall {
     this.radius = 11;
     this.vx = 0;
     this.vy = 0;
-    this.speed = window.innerWidth < 768 ? 4 : 4.8;
+    // Increased horizontal speed limit for high snappiness
+    this.speed = window.innerWidth < 768 ? 5.2 : 6.0;
     this.stretchX = 1;
     this.stretchY = 1;
   }
 
-  update() {
-    this.vy += GRAVITY;
+  update(dt) {
+    this.vy += GRAVITY * dt;
 
-    const accel = window.innerWidth < 768 ? 0.30 : 0.4;
-    const friction = window.innerWidth < 768 ? 0.84 : 0.82;
+    // Increased acceleration and adjusted friction based on delta-time
+    const accel = (window.innerWidth < 768 ? 0.35 : 0.45) * dt;
+    const friction = Math.pow(window.innerWidth < 768 ? 0.85 : 0.83, dt);
 
     if(moveLeft){
       this.vx -= accel;
@@ -939,18 +928,18 @@ class PlayerBall {
 
     this.vx = Math.max(-this.speed, Math.min(this.speed, this.vx));
 
-    this.x += this.vx;
-    this.y += this.vy;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
 
     if (this.x < -this.radius) this.x = CW + this.radius;
     if (this.x > CW + this.radius) this.x = -this.radius;
 
-    // squash and stretch factors based on vertical speed
+    // Squash & stretch factors
     let targetStretchY = 1 + Math.min(0.25, Math.abs(this.vy) * 0.025);
     let targetStretchX = 1 / targetStretchY;
 
-    this.stretchX += (targetStretchX - this.stretchX) * 0.15;
-    this.stretchY += (targetStretchY - this.stretchY) * 0.15;
+    this.stretchX += (targetStretchX - this.stretchX) * 0.15 * dt;
+    this.stretchY += (targetStretchY - this.stretchY) * 0.15 * dt;
 
     // Particle Trail
     if (gameStarted && !gameOver && !isLevelTransition) {
@@ -982,6 +971,14 @@ class PlayerBall {
   }
 
   drawBall() {
+    // Vector shadow overlay instead of slow Gaussian shadowBlur
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius + 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(201, 165, 106, 0.18)';
+    ctx.fill();
+    ctx.restore();
+
     ctx.beginPath();
     ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
 
@@ -991,8 +988,6 @@ class PlayerBall {
     radGrad.addColorStop(1, '#1A1C1A');
 
     ctx.fillStyle = radGrad;
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#A5844F';
     ctx.fill();
   }
 }
@@ -1006,7 +1001,6 @@ class ElegantPlatform {
     if (prevX === undefined) {
       this.x = margin + Math.random() * (CW - width - margin * 2);
     } else {
-      // Bounding next x center to be reachable by the player (max 130px distance)
       const maxJumpDist = 130;
       let minX = prevX - maxJumpDist;
       let maxX = prevX + maxJumpDist;
@@ -1022,8 +1016,8 @@ class ElegantPlatform {
     this.vx = (currentLevel >= 2) ? (Math.random() > 0.5 ? 1 : -1) * (0.3 + currentLevel * 0.2) : 0;
   }
 
-  update() {
-    this.x += this.vx;
+  update(dt) {
+    this.x += this.vx * dt;
     if (this.x < 0 || this.x + this.width > CW) {
       this.vx *= -1;
     }
@@ -1038,9 +1032,6 @@ class ElegantPlatform {
     ctx.strokeStyle = 'rgba(165, 132, 79, 0.4)';
     ctx.lineWidth = 1;
     ctx.stroke();
-    
-    ctx.shadowBlur = 4;
-    ctx.shadowColor = 'rgba(165, 132, 79, 0.15)';
     ctx.restore();
   }
 }
@@ -1057,7 +1048,7 @@ class RecipeIngredient {
     this.bobOffset = Math.random() * Math.PI * 2;
   }
 
-  update() {
+  update(dt) {
     this.x = this.platform.x + this.offsetX;
     this.y = this.platform.y - 18 + Math.sin(Date.now() * 0.005 + this.bobOffset) * 4;
   }
@@ -1066,14 +1057,18 @@ class RecipeIngredient {
     if (this.consumed) return;
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.shadowBlur = 8;
+
+    // Vector glow overlay instead of canvas shadowBlur
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius + 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fill();
 
     switch(this.type) {
       case 'bean':
         ctx.beginPath();
         ctx.ellipse(0, 0, 10, 6, Math.PI/4, 0, Math.PI*2);
         ctx.fillStyle = '#4A2E1B';
-        ctx.shadowColor = '#4A2E1B';
         ctx.fill();
         ctx.strokeStyle = '#2B1A10';
         ctx.stroke();
@@ -1083,13 +1078,11 @@ class RecipeIngredient {
         ctx.beginPath();
         ctx.ellipse(0, 0, 9, 5.5, 0, 0, Math.PI*2);
         ctx.fillStyle = '#6E7F42';
-        ctx.shadowColor = '#6E7F42';
         ctx.fill();
         break;
 
       case 'milk':
         ctx.fillStyle = '#EAEAEA';
-        ctx.shadowColor = '#FFFFFF';
         ctx.fillRect(-6, -8, 12, 16);
         ctx.fillStyle = '#A5844F';
         ctx.fillRect(-6, -2, 12, 3);
@@ -1098,7 +1091,6 @@ class RecipeIngredient {
       case 'ice':
         ctx.fillStyle = 'rgba(165,214,167,.7)';
         ctx.strokeStyle = '#E0F2F1';
-        ctx.shadowColor = '#80DEEA';
         ctx.lineWidth = 1;
         ctx.fillRect(-7,-7,14,14);
         ctx.strokeRect(-7,-7,14,14);
@@ -1108,7 +1100,6 @@ class RecipeIngredient {
         ctx.beginPath();
         ctx.ellipse(0,0,11,7,Math.PI/2,0,Math.PI*2);
         ctx.fillStyle='#4B7302';
-        ctx.shadowColor='#4B7302';
         ctx.fill();
         ctx.beginPath();
         ctx.arc(0,1,3,0,Math.PI*2);
@@ -1276,9 +1267,8 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', clearInput);
 
-function checkGameRules() {
+function checkGameRules(dt) {
   platforms.forEach(p => {
-    // Spatial Optimization: Check collisions only when ball is close vertically
     if (Math.abs(player.y - p.y) < 50) {
       if(player.vy > 0 && player.x >= p.x && player.x <= p.x + p.width && player.y + player.radius >= p.y && player.y - player.radius <= p.y + p.height){
         player.vy = BASE_JUMP;
@@ -1443,7 +1433,7 @@ function restartGame(){
   location.reload();
 }
 
-function updateCamera() {
+function updateCamera(dt) {
   if (player.y < CH / 2) {
     let diff = CH / 2 - player.y;
     player.y = CH / 2;
@@ -1500,7 +1490,12 @@ function drawLogoWatermark() {
   ctx.restore();
 }
 
-function gameLoop() {
+function gameLoop(time) {
+  if (!time) time = performance.now();
+  let dt = (time - lastTime) / 16.666;
+  if (dt > 4) dt = 4;
+  lastTime = time;
+
   ctx.clearRect(0,0,CW,CH);
 
   // Apply Screen Shake
@@ -1517,32 +1512,32 @@ function gameLoop() {
   // Performance Culling: Only update & draw items/platforms in viewport proximity
   platforms.forEach(p => {
     if (p.y >= -150 && p.y <= CH + 150) {
-      if(!gameOver && !isLevelTransition) p.update();
+      if(!gameOver && !isLevelTransition) p.update(dt);
       p.draw();
     }
   });
 
   items.forEach(d => {
     if (d.y >= -150 && d.y <= CH + 150) {
-      if(!gameOver && !isLevelTransition) d.update();
+      if(!gameOver && !isLevelTransition) d.update(dt);
       d.draw();
     }
   });
 
   if(gameStarted){
     if(!gameOver && !isLevelTransition){
-      player.update();
-      checkGameRules();
-      updateCamera();
+      player.update(dt);
+      checkGameRules(dt);
+      updateCamera(dt);
     }
     else if(isLevelTransition){
-      player.y += player.vy;
+      player.y += player.vy * dt;
     }
   }
 
   player.draw();
 
-  particleSystem.update();
+  particleSystem.update(dt);
   particleSystem.draw();
 
   ctx.restore();
