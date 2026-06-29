@@ -1374,6 +1374,13 @@ function checkLevelCompletion(){
     triggerLevelClear();
 }
 
+function clearInput() {
+  touchLastX = null;
+  isMouseDown = false;
+  moveLeft = false;
+  moveRight = false;
+}
+
 function triggerLevelClear(){
   isLevelTransition = true;
   clearInput();
