@@ -1001,14 +1001,25 @@ class ElegantPlatform {
     if (prevX === undefined) {
       this.x = margin + Math.random() * (CW - width - margin * 2);
     } else {
-      const maxJumpDist = 130;
-      let minX = prevX - maxJumpDist;
-      let maxX = prevX + maxJumpDist;
+      // Force a minimum horizontal offset based on platform width to create a natural zig-zag climbing flow
+      const minOffset = Math.max(35, width * 0.45);
+      const maxOffset = minOffset + 90;
       
-      let targetX = minX + Math.random() * (maxX - minX);
+      let dir = Math.random() > 0.5 ? 1 : -1;
       
       const minBound = margin;
       const maxBound = CW - width - margin;
+      
+      // Force direction if too close to screen boundaries
+      if (prevX - minOffset < minBound) {
+        dir = 1;
+      } else if (prevX + minOffset > maxBound) {
+        dir = -1;
+      }
+      
+      let offset = minOffset + Math.random() * (maxOffset - minOffset);
+      let targetX = prevX + dir * offset;
+      
       this.x = Math.max(minBound, Math.min(maxBound, targetX));
     }
 
