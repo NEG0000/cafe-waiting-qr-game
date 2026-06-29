@@ -639,24 +639,7 @@ canvas{
 </div>
 
 <script>
-window.onerror = function (message, source, lineno, colno, error) {
-  const errorDiv = document.createElement('div');
-  errorDiv.style.position = 'fixed';
-  errorDiv.style.top = '10px';
-  errorDiv.style.left = '10px';
-  errorDiv.style.right = '10px';
-  errorDiv.style.background = 'rgba(255, 0, 0, 0.95)';
-  errorDiv.style.color = '#fff';
-  errorDiv.style.padding = '15px';
-  errorDiv.style.borderRadius = '8px';
-  errorDiv.style.zIndex = '9999';
-  errorDiv.style.fontFamily = 'monospace';
-  errorDiv.style.fontSize = '12px';
-  errorDiv.style.wordBreak = 'break-all';
-  errorDiv.innerHTML = '<strong>Game Error Caught:</strong><br>' + message + '<br>at ' + source + ':' + lineno + ':' + colno;
-  document.body.appendChild(errorDiv);
-  return false;
-};
+
 
 const canvas = document.getElementById('climberCanvas');
 const ctx = canvas.getContext('2d');
@@ -1247,16 +1230,6 @@ window.addEventListener('resize', () => {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') moveLeft = true;
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') moveRight = true;
-  
-  // Cheat key to clear current level for testing
-  if (e.key.toLowerCase() === 'c') {
-    let targets = levelTargets[currentLevel];
-    for(let key in targets){
-      currentLevelCounts[key] = targets[key];
-    }
-    updateRecipeBar();
-    checkLevelCompletion();
-  }
 });
 
 window.addEventListener('keyup', (e) => {
