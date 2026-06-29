@@ -674,7 +674,8 @@ let moveRight = false;
 let screenShake = 0;
 let touchLastX = null;
 let isMouseDown = false;
-const touchSensitivity = 1.35;
+const touchSensitivity = 0.75; // Lowered to medium sensitivity for comfortable thumb drift
+let nextLevelToLoad = 2;
 
 // Delta-time tracking variables to normalize physics across all frame rates (30FPS / 60FPS / 120FPS)
 let lastTime = performance.now();
@@ -1365,14 +1366,17 @@ function triggerLevelClear(){
     label.innerText = 'المشروب الحالي المكتشف';
 
     if(currentLevel===1){
+      nextLevelToLoad = 2;
       mainTxt.innerText='القهوة السعودية جاهزة';
       btn.innerText='ابدأ المستوى ٢';
     }
     else if(currentLevel===2){
+      nextLevelToLoad = 3;
       mainTxt.innerText='آيس لاتيه منوع جاهز';
       btn.innerText='ابدأ المستوى ٣';
     }
     else if(currentLevel===3){
+      nextLevelToLoad = -1; // Coupon activation
       mainTxt.innerText='أفوكادو كوفي متكامل جاهز';
       btn.innerText='احصل على القسيمة';
     }
@@ -1380,24 +1384,24 @@ function triggerLevelClear(){
 }
 
 function handleOverlayAction(){
-  const btnText = document.getElementById('screen-btn').innerText;
   document.getElementById('overlay-screen').classList.remove('active');
 
-  if(btnText==='ابدأ المستوى ٢'){
+  if(nextLevelToLoad===2){
     isLevelTransition = false;
     initLevelState(2);
   }
-  else if(btnText==='ابدأ المستوى ٣'){
+  else if(nextLevelToLoad===3){
     isLevelTransition = false;
     initLevelState(3);
   }
-  else if(btnText==='احصل على القسيمة'){
+  else if(nextLevelToLoad===-1){
     document.getElementById('overlay-screen').classList.add('active');
     document.getElementById('screen-title').innerText='تم تفعيل القسيمة';
     document.getElementById('screen-desc').innerText='أظهر هذا الرمز المميز للبارسيتا عند الكاونتر لاستلام العرض.';
     document.getElementById('screen-label').innerText='كود الخلطة الذهبية الفاخر';
     document.getElementById('screen-main-text').innerText='AVOCADOPRO26';
     document.getElementById('screen-btn').innerText='العب من جديد';
+    nextLevelToLoad = 1; // Reset to level 1 for replay
   }
   else {
     gameOver = false;
