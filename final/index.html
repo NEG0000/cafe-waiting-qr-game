@@ -651,10 +651,10 @@ const container = document.getElementById('game-container');
 let CW = canvas.width = window.innerWidth;
 let CH = canvas.height = window.innerHeight;
 
-// Snappier, faster physics parameters to eliminate slugging pacing
-const GRAVITY = 0.42;
-const BASE_JUMP = -9.8;
-const ITEM_BOUNCE = -7.2;
+// Normal physics parameters
+const GRAVITY = 0.35;
+const BASE_JUMP = -8.9;
+const ITEM_BOUNCE = -6.2;
 
 let currentLevel = 1;
 let score = 0;
@@ -903,8 +903,8 @@ class PlayerBall {
     this.radius = 11;
     this.vx = 0;
     this.vy = 0;
-    // Increased horizontal speed limit for high snappiness
-    this.speed = window.innerWidth < 768 ? 5.2 : 6.0;
+    // Normal horizontal speed limit
+    this.speed = window.innerWidth < 768 ? 4 : 4.8;
     this.stretchX = 1;
     this.stretchY = 1;
   }
@@ -912,9 +912,9 @@ class PlayerBall {
   update(dt) {
     this.vy += GRAVITY * dt;
 
-    // Increased acceleration and adjusted friction based on delta-time
-    const accel = (window.innerWidth < 768 ? 0.35 : 0.45) * dt;
-    const friction = Math.pow(window.innerWidth < 768 ? 0.85 : 0.83, dt);
+    // Normal acceleration and friction based on delta-time
+    const accel = (window.innerWidth < 768 ? 0.30 : 0.40) * dt;
+    const friction = Math.pow(window.innerWidth < 768 ? 0.84 : 0.82, dt);
 
     if(moveLeft){
       this.vx -= accel;
