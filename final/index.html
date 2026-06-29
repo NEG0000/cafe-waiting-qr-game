@@ -545,30 +545,10 @@ canvas{
     z-index: 5;
 }
 
-.touch-zone {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.25s ease;
-    background: radial-gradient(circle at center, rgba(201, 165, 106, 0.08), transparent 70%);
+@keyframes slideTip {
+  0%, 100% { transform: translateX(-8px); }
+  50% { transform: translateX(8px); }
 }
-
-.touch-zone span {
-    font-size: 44px;
-    color: rgba(201, 165, 106, 0.25);
-    text-shadow: 0 0 15px rgba(201, 165, 106, 0.15);
-    transform: scale(0.9);
-    transition: transform 0.2s ease;
-}
-
-.touch-zone.active {
-    opacity: 1;
-}
-
-.touch-zone.active span {
-    transform: scale(1.1);
 </style>
 </head>
 <body>
@@ -613,9 +593,9 @@ canvas{
 </div>
 
 <!-- TOUCH CONTROLS FOR MOBILE -->
-<div id="touch-controls">
-<div id="touch-left" class="touch-zone"><span>◀</span></div>
-<div id="touch-right" class="touch-zone"><span>▶</span></div>
+<div id="touch-controls" style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.8; pointer-events: none; z-index: 5; transition: opacity 0.5s ease; text-align: center;">
+  <span style="font-size: 24px; color: rgba(201, 165, 106, 0.5); text-shadow: 0 0 10px rgba(201, 165, 106, 0.2); animation: slideTip 2s infinite ease-in-out; display: inline-block;">◀  swipe  ▶</span>
+  <span style="font-size: 11px; color: rgba(201, 165, 106, 0.4); margin-top: 6px; font-weight: 700; letter-spacing: 0.5px;">اسحب للتوجيه بـيد واحدة 📱</span>
 </div>
 
 <canvas id="climberCanvas"></canvas>
@@ -692,6 +672,9 @@ const levelTargets = {
 let moveLeft = false;
 let moveRight = false;
 let screenShake = 0;
+let touchLastX = null;
+let isMouseDown = false;
+const touchSensitivity = 1.35;
 
 // Delta-time tracking variables to normalize physics across all frame rates (30FPS / 60FPS / 120FPS)
 let lastTime = performance.now();
@@ -927,23 +910,29 @@ class PlayerBall {
   update(dt) {
     this.vy += GRAVITY * dt;
 
-    // Normal acceleration and friction based on delta-time
-    const accel = (window.innerWidth < 768 ? 0.30 : 0.40) * dt;
-    const friction = Math.pow(window.innerWidth < 768 ? 0.84 : 0.82, dt);
+    if (touchLastX !== null || isMouseDown) {
+      // Direct drag control - position updated in event listener, vx set there
+      // We slowly decay vx so it represents the average drag velocity
+      this.vx *= Math.pow(0.85, dt);
+    } else {
+      // Keyboard/momentum control
+      const accel = (window.innerWidth < 768 ? 0.30 : 0.40) * dt;
+      const friction = Math.pow(window.innerWidth < 768 ? 0.84 : 0.82, dt);
 
-    if(moveLeft){
-      this.vx -= accel;
-    }
-    else if(moveRight){
-      this.vx += accel;
-    }
-    else{
-      this.vx *= friction;
+      if(moveLeft){
+        this.vx -= accel;
+      }
+      else if(moveRight){
+        this.vx += accel;
+      }
+      else{
+        this.vx *= friction;
+      }
+
+      this.vx = Math.max(-this.speed, Math.min(this.speed, this.vx));
+      this.x += this.vx * dt;
     }
 
-    this.vx = Math.max(-this.speed, Math.min(this.speed, this.vx));
-
-    this.x += this.vx * dt;
     this.y += this.vy * dt;
 
     if (this.x < -this.radius) this.x = CW + this.radius;
@@ -1245,53 +1234,55 @@ window.addEventListener('keyup', (e) => {
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') moveRight = false;
 });
 
-function processInput(clientX, target) {
-  if (target && (target.id === 'mute-btn' || target.closest('button') || target.closest('input') || target.closest('#leaderboard-panel'))) {
-    return;
-  }
-  if (clientX < window.innerWidth / 2) {
-    moveLeft = true;
-    moveRight = false;
-    document.getElementById('touch-left').classList.add('active');
-    document.getElementById('touch-right').classList.remove('active');
-  } else {
-    moveRight = true;
-    moveLeft = false;
-    document.getElementById('touch-right').classList.add('active');
-    document.getElementById('touch-left').classList.remove('active');
-  }
-}
-
-function clearInput() {
-  moveLeft = false;
-  moveRight = false;
-  document.getElementById('touch-left').classList.remove('active');
-  document.getElementById('touch-right').classList.remove('active');
-}
-
 window.addEventListener('touchstart', (e) => {
   if(gameOver || isLevelTransition) return;
-  processInput(e.touches[0].clientX, e.target);
+  if (e.target && (e.target.id === 'mute-btn' || e.target.closest('button') || e.target.closest('input') || e.target.closest('#leaderboard-panel'))) {
+    return;
+  }
+  touchLastX = e.touches[0].clientX;
 }, {passive:true});
 
 window.addEventListener('touchmove', (e) => {
-  if(gameOver || isLevelTransition) return;
-  processInput(e.touches[0].clientX, e.target);
+  if(gameOver || isLevelTransition || touchLastX === null) return;
+  
+  let currentX = e.touches[0].clientX;
+  let diffX = currentX - touchLastX;
+  touchLastX = currentX;
+  
+  let moveAmount = diffX * touchSensitivity;
+  player.x += moveAmount;
+  player.vx = moveAmount; // Drift speed momentum
 }, {passive:true});
 
-window.addEventListener('touchend', clearInput);
+window.addEventListener('touchend', () => {
+  touchLastX = null;
+});
 
 window.addEventListener('mousedown', (e) => {
   if(gameOver || isLevelTransition) return;
-  processInput(e.clientX, e.target);
+  if (e.target && (e.target.id === 'mute-btn' || e.target.closest('button') || e.target.closest('input') || e.target.closest('#leaderboard-panel'))) {
+    return;
+  }
+  isMouseDown = true;
+  touchLastX = e.clientX;
 });
 
 window.addEventListener('mousemove', (e) => {
-  if(e.buttons === 1 && !gameOver && !isLevelTransition)
-    processInput(e.clientX, e.target);
+  if(gameOver || isLevelTransition || !isMouseDown || touchLastX === null) return;
+  
+  let currentX = e.clientX;
+  let diffX = currentX - touchLastX;
+  touchLastX = currentX;
+  
+  let moveAmount = diffX * touchSensitivity;
+  player.x += moveAmount;
+  player.vx = moveAmount;
 });
 
-window.addEventListener('mouseup', clearInput);
+window.addEventListener('mouseup', () => {
+  isMouseDown = false;
+  touchLastX = null;
+});
 
 function checkGameRules(dt) {
   platforms.forEach(p => {
@@ -1581,6 +1572,15 @@ document.getElementById('start-btn').addEventListener('click',()=>{
 
   sounds.init();
   gameStarted = true;
+
+  // Fade out touch controls tutorial overlay
+  const touchCtrls = document.getElementById('touch-controls');
+  if (touchCtrls) {
+    touchCtrls.style.opacity = '0';
+    setTimeout(() => {
+      touchCtrls.style.display = 'none';
+    }, 500);
+  }
 
   const intro = document.getElementById('intro-title');
   intro.classList.add('show');
